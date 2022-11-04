@@ -1,0 +1,7 @@
+{
+    "name": "webtourismus/alpinejs-focus",
+    "description": "Mirror of https://www.npmjs.com/package/@alpinejs/focus as drupal-library",
+    "license": "MIT",
+    "type": "drupal-library",
+    "homepage": "https://alpinejs.dev/plugins/focus"
+}
