@@ -1,9 +1,5 @@
 (() => {
   // node_modules/tabbable/dist/index.esm.js
-  /*!
-  * tabbable 5.2.1
-  * @license MIT, https://github.com/focus-trap/tabbable/blob/master/LICENSE
-  */
   var candidateSelectors = ["input", "select", "textarea", "a[href]", "button", "[tabindex]", "audio[controls]", "video[controls]", '[contenteditable]:not([contenteditable="false"])', "details>summary:first-of-type", "details"];
   var candidateSelector = /* @__PURE__ */ candidateSelectors.join(",");
   var matches = typeof Element === "undefined" ? function() {
@@ -126,7 +122,8 @@
     return false;
   };
   var isNodeMatchingSelectorFocusable = function isNodeMatchingSelectorFocusable2(options, node) {
-    if (node.disabled || isHiddenInput(node) || isHidden(node, options.displayCheck) || isDetailsWithSummary(node) || isDisabledFromFieldset(node)) {
+    if (node.disabled || isHiddenInput(node) || isHidden(node, options.displayCheck) || // For a details element with a summary, the summary element gets the focus
+    isDetailsWithSummary(node) || isDisabledFromFieldset(node)) {
       return false;
     }
     return true;
@@ -177,10 +174,6 @@
   };
 
   // node_modules/focus-trap/dist/focus-trap.esm.js
-  /*!
-  * focus-trap 6.6.1
-  * @license MIT, https://github.com/focus-trap/focus-trap/blob/master/LICENSE
-  */
   function ownKeys(object, enumerableOnly) {
     var keys = Object.keys(object);
     if (Object.getOwnPropertySymbols) {
@@ -290,12 +283,22 @@
       delayInitialFocus: true
     }, userOptions);
     var state = {
+      // @type {Array<HTMLElement>}
       containers: [],
+      // list of objects identifying the first and last tabbable nodes in all containers/groups in
+      //  the trap
+      // NOTE: it's possible that a group has no tabbable nodes if nodes get removed while the trap
+      //  is active, but the trap should never get to a state where there isn't at least one group
+      //  with at least one tabbable node in it (that would lead to an error condition that would
+      //  result in an error being thrown)
+      // @type {Array<{ container: HTMLElement, firstTabbableNode: HTMLElement|null, lastTabbableNode: HTMLElement|null }>}
       tabbableGroups: [],
       nodeFocusedBeforeActivation: null,
       mostRecentlyFocusedNode: null,
       active: false,
       paused: false,
+      // timer ID for when delayInitialFocus is true and initial focus in this trap
+      //  has been delayed during activation
       delayInitialFocusTimer: void 0
     };
     var trap;
@@ -393,6 +396,17 @@
       }
       if (valueOrHandler(config.clickOutsideDeactivates, e)) {
         trap.deactivate({
+          // if, on deactivation, we should return focus to the node originally-focused
+          //  when the trap was activated (or the configured `setReturnFocus` node),
+          //  then assume it's also OK to return focus to the outside node that was
+          //  just clicked, causing deactivation, as long as that node is focusable;
+          //  if it isn't focusable, then return focus to the original node focused
+          //  on activation (or the configured `setReturnFocus` node)
+          // NOTE: by setting `returnFocus: false`, deactivate() will do nothing,
+          //  which will result in the outside click setting focus to the node
+          //  that was clicked, whether it's focusable or not; by setting
+          //  `returnFocus: true`, we'll attempt to re-focus the node originally-focused
+          //  on activation (or the configured `setReturnFocus` node)
           returnFocus: config.returnFocusOnDeactivate && !isFocusable(e.target)
         });
         return;
@@ -670,7 +684,7 @@
         focusables() {
           if (Array.isArray(within))
             return within;
-          return focusable(within, {displayCheck: "none"});
+          return focusable(within, { displayCheck: "none" });
         },
         all() {
           return this.focusables();
@@ -730,57 +744,63 @@
           setTimeout(() => {
             if (!el2.hasAttribute("tabindex"))
               el2.setAttribute("tabindex", "0");
-            el2.focus({preventScroll: this._noscroll});
+            el2.focus({ preventScroll: this._noscroll });
           });
         }
       };
     });
-    Alpine.directive("trap", Alpine.skipDuringClone((el, {expression, modifiers}, {effect, evaluateLater, cleanup}) => {
-      let evaluator = evaluateLater(expression);
-      let oldValue = false;
-      let trap = createFocusTrap(el, {
-        escapeDeactivates: false,
-        allowOutsideClick: true,
-        fallbackFocus: () => el,
-        initialFocus: el.querySelector("[autofocus]")
-      });
-      let undoInert = () => {
-      };
-      let undoDisableScrolling = () => {
-      };
-      const releaseFocus = () => {
-        undoInert();
-        undoInert = () => {
-        };
-        undoDisableScrolling();
-        undoDisableScrolling = () => {
-        };
-        trap.deactivate({
-          returnFocus: !modifiers.includes("noreturn")
+    Alpine.directive("trap", Alpine.skipDuringClone(
+      (el, { expression, modifiers }, { effect, evaluateLater, cleanup }) => {
+        let evaluator = evaluateLater(expression);
+        let oldValue = false;
+        let trap = createFocusTrap(el, {
+          escapeDeactivates: false,
+          allowOutsideClick: true,
+          fallbackFocus: () => el,
+          initialFocus: el.querySelector("[autofocus]")
         });
-      };
-      effect(() => evaluator((value) => {
-        if (oldValue === value)
-          return;
-        if (value && !oldValue) {
-          setTimeout(() => {
-            if (modifiers.includes("inert"))
-              undoInert = setInert(el);
-            if (modifiers.includes("noscroll"))
-              undoDisableScrolling = disableScrolling();
-            trap.activate();
+        let undoInert = () => {
+        };
+        let undoDisableScrolling = () => {
+        };
+        const releaseFocus = () => {
+          undoInert();
+          undoInert = () => {
+          };
+          undoDisableScrolling();
+          undoDisableScrolling = () => {
+          };
+          trap.deactivate({
+            returnFocus: !modifiers.includes("noreturn")
           });
-        }
-        if (!value && oldValue) {
-          releaseFocus();
-        }
-        oldValue = !!value;
-      }));
-      cleanup(releaseFocus);
-    }, (el, {expression, modifiers}, {evaluate}) => {
-      if (modifiers.includes("inert") && evaluate(expression))
-        setInert(el);
-    }));
+        };
+        effect(() => evaluator((value) => {
+          if (oldValue === value)
+            return;
+          if (value && !oldValue) {
+            setTimeout(() => {
+              if (modifiers.includes("inert"))
+                undoInert = setInert(el);
+              if (modifiers.includes("noscroll"))
+                undoDisableScrolling = disableScrolling();
+              trap.activate();
+            });
+          }
+          if (!value && oldValue) {
+            releaseFocus();
+          }
+          oldValue = !!value;
+        }));
+        cleanup(releaseFocus);
+      },
+      // When cloning, we only want to add aria-hidden attributes to the
+      // DOM and not try to actually trap, as trapping can mess with the
+      // live DOM and isn't just isolated to the cloned DOM.
+      (el, { expression, modifiers }, { evaluate }) => {
+        if (modifiers.includes("inert") && evaluate(expression))
+          setInert(el);
+      }
+    ));
   }
   function setInert(el) {
     let undos = [];
@@ -798,9 +818,11 @@
     if (el.isSameNode(document.body) || !el.parentNode)
       return;
     Array.from(el.parentNode.children).forEach((sibling) => {
-      if (!sibling.isSameNode(el))
+      if (sibling.isSameNode(el)) {
+        crawlSiblingsUp(el.parentNode, callback);
+      } else {
         callback(sibling);
-      crawlSiblingsUp(el.parentNode, callback);
+      }
     });
   }
   function disableScrolling() {
@@ -820,3 +842,17 @@
     window.Alpine.plugin(src_default);
   });
 })();
+/*! Bundled license information:
+
+tabbable/dist/index.esm.js:
+  (*!
+  * tabbable 5.2.1
+  * @license MIT, https://github.com/focus-trap/tabbable/blob/master/LICENSE
+  *)
+
+focus-trap/dist/focus-trap.esm.js:
+  (*!
+  * focus-trap 6.6.1
+  * @license MIT, https://github.com/focus-trap/focus-trap/blob/master/LICENSE
+  *)
+*/
